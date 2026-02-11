@@ -15,9 +15,9 @@ public class PIncrement {
 
         long t0;
         long t1;
-        long diff;
+        double diff;
 
-        final int m = 1200000;
+        final int m = 120000;
         int r = m % numThreads;
         int q = m / numThreads;
 
@@ -50,11 +50,12 @@ public class PIncrement {
         }
 
         t1 = System.nanoTime();
-        diff = t1 - t0;
-        System.out.println("type=Anderson’s spin lock algorithm n=" + numThreads + " time=" + diff + " ms");
+        diff = (t1 - t0) / 1000000.0;
+        System.out.println("type=Anderson's spin lock algorithm n=" + numThreads + " time=" + diff + " ms");
+        System.out.println("Final value: " + cFinal.get());
 
         exec.shutdown();
-        return 0;
+        return cFinal.get();
     }
     public static class Anderson {
         AtomicInteger tailSlot = new AtomicInteger(0);
@@ -68,7 +69,7 @@ public class PIncrement {
             for (int i = 0; i < n; i++) {
                 available.add(new AtomicBoolean(false));
             }
-            available.set(0, new AtomicBoolean(false));
+            available.set(0, new AtomicBoolean(true));
         }
         public void lock() {
             mySlot.set(tailSlot.getAndIncrement() % n);

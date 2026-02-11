@@ -1,18 +1,14 @@
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Condition;
 
 public class Monkey {
-    // declare the variables here
-    // A monkey calls the method when it arrives at the river bank and
-    // wants to climb the rope in the specified direction (0 or 1);
-    // Kong’s direction is -1.
-    // The method blocks a monkey until it is allowed to climb the rope.
     int direction;
     int capacity;
-    int current;
     boolean kongWaiting;
     boolean kongPresent;
     LinkedList rope;
     ReentrantLock ropeLock;
+    Condition canClimb;
 
     Monkey() {
         capacity = 3;
@@ -21,32 +17,38 @@ public class Monkey {
         kongPresent = false;
         rope = new LinkedList(capacity);
         ropeLock = new ReentrantLock();
+        canClimb = ropeLock.newCondition();
     }
 
     public void ClimbRope(int direction) throws InterruptedException {
-        if (direction == -1) { kongWaiting = true;}
-        while (rope.isFull() || (direction != rope.head.direction && rope.size >= 1) || kongWaiting || kongPresent) {
-            this.wait();
-        }
-        // Entering CS ...
         ropeLock.lock();
-        if (direction == -1) { // If the monkey is Kong, signal
-            kongPresent = true;
-            kongWaiting = false;
+        try {
+            if (direction == -1) {
+                kongWaiting = true;
+            }
+            while (rope.isFull() || (direction != rope.head.direction && rope.size >= 1) || kongWaiting || kongPresent) {
+                canClimb.await();
+            }
+            if (direction == -1) {
+                kongPresent = true;
+                kongWaiting = false;
+            }
+            LinkedList.Node monkey = new LinkedList.Node(direction);
+            rope.push(monkey);
+            rope.head.direction = direction;
+        } finally {
+            ropeLock.unlock();
         }
-        LinkedList.Node monkey = new LinkedList.Node(direction);
-        this.rope.push(monkey); // this method is atomic
-        this.rope.head.direction = direction;
-        ropeLock.unlock();
-        // Exiting CS ...
     }
+    
     public void LeaveRope() {
-        // Entering CS ...
         ropeLock.lock();
-        this.rope.pop();
-        this.notifyAll();
-        ropeLock.unlock();
-        // Exiting CS ...
+        try {
+            rope.pop();
+            canClimb.signalAll();
+        } finally {
+            ropeLock.unlock();
+        }
     }
     /**
      * Returns the number of monkeys on the rope currently for test purpose.
