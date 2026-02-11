@@ -4,11 +4,12 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class PIncrement {
     public static int parallelIncrement(int c, int numThreads) {
-        Anderson anderson = new Anderson();
+        Anderson anderson = new Anderson(numThreads);
         ExecutorService exec = Executors.newFixedThreadPool(numThreads);
         List<Future<?>> futures = new ArrayList<>();
 
@@ -32,9 +33,9 @@ public class PIncrement {
             int finalIncThread = incThread;
             Future<?> future = exec.submit(() -> {
                 for (int j = 0; j < finalIncThread; j++) {
-                    anderson.requestCS();
+                    anderson.lock();
                     cFinal.getAndIncrement();
-                    anderson.releaseCS();
+                    anderson.unlock();
                 }
             });
             futures.add(future);
@@ -56,17 +57,26 @@ public class PIncrement {
         return 0;
     }
     public static class Anderson {
-        public Anderson() {
+        AtomicInteger tailSlot = new AtomicInteger(0);
+        ArrayList<AtomicBoolean> available;
+        ThreadLocal<Integer> mySlot = ThreadLocal.withInitial(() -> 0);
+        int n;
+        public Anderson(int n) {
+            this.n = n;
 
+            available = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                available.add(new AtomicBoolean(false));
+            }
+            available.set(0, new AtomicBoolean(false));
         }
-
-        public void requestCS() {
-
+        public void lock() {
+            mySlot.set(tailSlot.getAndIncrement() % n);
+            while (!available.get(mySlot.get()).get()) {}
         }
-
-        public void releaseCS() {
-
+        public void unlock() {
+            available.get(mySlot.get()).getAndSet(false);
+            available.get((mySlot.get()+1) % n).getAndSet(true);
         }
-
     }
 }
